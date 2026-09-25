@@ -194,21 +194,6 @@
   .proc-pill.down .dot{background:var(--bad);}
   .proc-pill.down{color:var(--bad);border-color:var(--bad-dim);}
 
-  .db-metrics{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);}
-  .db-metric-item{
-    display:flex;justify-content:space-between;align-items:center;
-    font-size:11px;margin-bottom:6px;gap:10px;
-  }
-  .db-metric-item:last-child{margin-bottom:0;}
-  .db-metric-item .dmlabel{
-    color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  }
-  .db-metric-item .dmvalue{
-    color:var(--accent);font-weight:700;font-family:var(--mono);
-    flex:none;white-space:nowrap;
-  }
-  .db-metric-item .dmvalue.fail{color:var(--text-faint);font-weight:400;font-style:italic;}
-
   .card-foot{
     display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;
     border-top:1px solid var(--line);font-size:10.5px;color:var(--text-faint);
@@ -232,40 +217,6 @@
   .empty .big{font-family:var(--disp);font-size:20px;color:var(--text-dim);margin-bottom:8px;}
   .empty code{color:var(--accent);background:var(--panel);padding:2px 6px;border-radius:4px;}
 
-  /* ---------- drag & drop ---------- */
-  .btn-reset{
-    background:transparent;border:1px solid var(--line);color:var(--text-dim);
-    font-family:var(--mono);font-size:12px;letter-spacing:.02em;
-    padding:8px 12px;border-radius:6px;cursor:pointer;white-space:nowrap;
-    transition:all .15s;
-  }
-  .btn-reset:hover{border-color:var(--accent);color:var(--accent);}
-  .btn-reset:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
-
-  .drag-handle{
-    display:flex;align-items:center;justify-content:center;
-    width:20px;height:20px;flex:none;margin-right:2px;
-    color:var(--text-faint);cursor:grab;border-radius:4px;
-    transition:color .15s,background .15s;
-  }
-  .drag-handle:hover{color:var(--text-dim);background:var(--panel-2);}
-  .drag-handle svg{width:12px;height:12px;pointer-events:none;}
-
-  .card{cursor:default;}
-  .card.dragging{
-    opacity:.4;
-    border-style:dashed;
-    border-color:var(--accent);
-  }
-  .card.drag-over{
-    border-color:var(--accent);
-    box-shadow:0 0 0 1px var(--accent) inset;
-  }
-  .card.drag-over::after{
-    content:'';position:absolute;inset:0;
-    background:rgba(91,140,255,0.06);pointer-events:none;
-  }
-
   .err-banner{
     background:var(--bad-dim);border:1px solid var(--bad);color:var(--bad);
     padding:10px 16px;border-radius:6px;font-size:12px;margin-bottom:16px;display:none;
@@ -286,7 +237,6 @@
   </div>
   <div class="toolbar">
     <input id="search" type="text" placeholder="hostname 검색...">
-    <button class="btn-reset" id="resetOrder" title="드래그로 바꾼 카드 배치를 원래대로 되돌립니다">배치 초기화</button>
     <div class="clock" id="clock">--:--:--</div>
   </div>
 </header>
@@ -338,51 +288,6 @@ const DISK_WARN = 80, DISK_BAD = 90;
 
 let allServers = [];
 
-// ---- 드래그로 바꾼 카드 배치를 브라우저에 저장/복원 ----
-const ORDER_KEY = 'mycollector.cardOrder';
-let customOrder = [];
-try {
-  customOrder = JSON.parse(localStorage.getItem(ORDER_KEY) || '[]');
-} catch (e) {
-  customOrder = [];
-}
-
-function applyCustomOrder(list){
-  // 기본 정렬(ONLINE 우선 + hostname): 저장된 순서가 없거나,
-  // 저장된 순서에 없는(새로 추가된) 서버를 뒤에 붙일 때 사용
-  const defaultSorted = [...list].sort((a,b) => {
-    if ((a.status==='ONLINE') !== (b.status==='ONLINE')) return a.status==='ONLINE' ? -1 : 1;
-    return (a.hostname||'').localeCompare(b.hostname||'');
-  });
-
-  if (!customOrder.length) return defaultSorted;
-
-  const byHost = new Map(list.map(s => [(s.hostname||'').toLowerCase(), s]));
-  const used = new Set();
-  const ordered = [];
-
-  customOrder.forEach(h => {
-    const s = byHost.get(h);
-    if (s) { ordered.push(s); used.add(h); }
-  });
-  defaultSorted.forEach(s => {
-    const h = (s.hostname||'').toLowerCase();
-    if (!used.has(h)) ordered.push(s);
-  });
-  return ordered;
-}
-
-function saveCurrentOrderFromDom(){
-  const cardsEl = document.getElementById('cards');
-  // 검색 필터가 걸려 화면에 일부만 보이는 상태에서 드래그해도,
-  // 화면에 없는(필터로 숨겨진) 서버의 순서 정보는 유지한 채 뒤에 붙여서 저장
-  const visibleOrder = Array.from(cardsEl.querySelectorAll('.card')).map(c => c.dataset.hostname);
-  const visibleSet = new Set(visibleOrder);
-  const hiddenRemaining = customOrder.filter(h => !visibleSet.has(h));
-  customOrder = [...visibleOrder, ...hiddenRemaining];
-  localStorage.setItem(ORDER_KEY, JSON.stringify(customOrder));
-}
-
 function heartbeatSvg(){
   return `<svg class="heartbeat" viewBox="0 0 32 20"><path d="M0 10 H8 L11 3 L15 17 L18 10 H32"/></svg>`;
 }
@@ -418,29 +323,15 @@ function serverCard(s){
     return `<div class="proc-pill ${up?'up':'down'}"><span class="dot"></span>${p.name}</div>`;
   }).join('');
 
-  const dbMetricsHtml = (s.dbMetrics || []).map(m => {
-    const failed = m.value == null;
-    return `
-      <div class="db-metric-item">
-        <span class="dmlabel" title="${escapeAttr(m.label)}">${m.label ?? '-'}</span>
-        <span class="dmvalue ${failed ? 'fail' : ''}">${failed ? '조회 실패' : m.value}</span>
-      </div>`;
-  }).join('');
-
   const ttl = s.remainingTtl;
   const ttlWarnClass = (online && ttl >= 0 && ttl < 15) ? 'warn' : '';
 
   return `
-  <div class="card ${online ? 'online':'offline'}" data-hostname="${(s.hostname||'').toLowerCase()}" draggable="true">
+  <div class="card ${online ? 'online':'offline'}" data-hostname="${(s.hostname||'').toLowerCase()}">
     <div class="card-head">
-      <div style="display:flex;align-items:flex-start;gap:6px;">
-        <div class="drag-handle" title="드래그해서 순서 변경">
-          <svg viewBox="0 0 12 12" fill="currentColor"><circle cx="3" cy="2" r="1.3"/><circle cx="9" cy="2" r="1.3"/><circle cx="3" cy="6" r="1.3"/><circle cx="9" cy="6" r="1.3"/><circle cx="3" cy="10" r="1.3"/><circle cx="9" cy="10" r="1.3"/></svg>
-        </div>
-        <div>
-          <h3>${s.hostname ?? '-'}</h3>
-          <div class="ip">${s.ip ?? '-'}</div>
-        </div>
+      <div>
+        <h3>${s.hostname ?? '-'}</h3>
+        <div class="ip">${s.ip ?? '-'}</div>
       </div>
       <div class="badge ${online?'online':'offline'}">
         ${online ? heartbeatSvg() : ''}
@@ -459,7 +350,6 @@ function serverCard(s){
 
     ${diskHtml ? `<div class="disk-list">${diskHtml}</div>` : ''}
     ${procHtml ? `<div class="proc-list">${procHtml}</div>` : ''}
-    ${dbMetricsHtml ? `<div class="db-metrics">${dbMetricsHtml}</div>` : ''}
 
     <div class="card-foot">
       <span>${s.getLastSeenFormatted ?? formatTs(s.timestamp)}</span>
@@ -494,11 +384,13 @@ function render(list){
   }
   emptyEl.style.display = 'none';
 
-  // 저장된 드래그 순서가 있으면 그 순서로, 없으면 ONLINE 우선 + hostname 순
-  const sorted = applyCustomOrder(list);
+  // ONLINE 우선 정렬, 그 다음 hostname
+  const sorted = [...list].sort((a,b) => {
+    if ((a.status==='ONLINE') !== (b.status==='ONLINE')) return a.status==='ONLINE' ? -1 : 1;
+    return (a.hostname||'').localeCompare(b.hostname||'');
+  });
 
   cardsEl.innerHTML = sorted.map(serverCard).join('');
-  attachDragHandlers();
 }
 
 function applyFilter(){
@@ -566,77 +458,6 @@ async function handleDelete(hostname, btnEl){
     if (btnEl) { btnEl.disabled = false; btnEl.textContent = '삭제'; }
   }
 }
-
-// ---- 드래그앤드롭으로 카드 순서 변경 ----
-let draggedCard = null;
-
-function attachDragHandlers(){
-  const cardsEl = document.getElementById('cards');
-  cardsEl.querySelectorAll('.card').forEach(card => {
-    card.addEventListener('dragstart', handleDragStart);
-    card.addEventListener('dragover', handleDragOver);
-    card.addEventListener('dragleave', handleDragLeave);
-    card.addEventListener('drop', handleDrop);
-    card.addEventListener('dragend', handleDragEnd);
-  });
-}
-
-function handleDragStart(e){
-  // 삭제 버튼 클릭 시에는 드래그가 시작되지 않도록 방지
-  if (e.target.closest('.btn-delete')) {
-    e.preventDefault();
-    return;
-  }
-  draggedCard = this;
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', this.dataset.hostname || '');
-  // 브라우저가 드래그 이미지를 캡처한 뒤 스타일을 적용
-  requestAnimationFrame(() => this.classList.add('dragging'));
-}
-
-function handleDragOver(e){
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  if (this === draggedCard) return;
-  this.classList.add('drag-over');
-}
-
-function handleDragLeave(){
-  this.classList.remove('drag-over');
-}
-
-function handleDrop(e){
-  e.preventDefault();
-  this.classList.remove('drag-over');
-  if (!draggedCard || this === draggedCard) return;
-
-  const cardsEl = document.getElementById('cards');
-  const cardsArr = Array.from(cardsEl.children);
-  const fromIdx = cardsArr.indexOf(draggedCard);
-  const toIdx = cardsArr.indexOf(this);
-
-  if (fromIdx < toIdx) {
-    this.after(draggedCard);
-  } else {
-    this.before(draggedCard);
-  }
-
-  saveCurrentOrderFromDom();
-}
-
-function handleDragEnd(){
-  this.classList.remove('dragging');
-  document.getElementById('cards').querySelectorAll('.card').forEach(c => c.classList.remove('drag-over'));
-  draggedCard = null;
-}
-
-document.getElementById('resetOrder').addEventListener('click', () => {
-  const ok = confirm('드래그로 변경한 카드 배치를 초기 상태(ONLINE 우선 + hostname 순)로 되돌릴까요?');
-  if (!ok) return;
-  customOrder = [];
-  localStorage.removeItem(ORDER_KEY);
-  applyFilter();
-});
 
 tickClock();
 setInterval(tickClock, 1000);
