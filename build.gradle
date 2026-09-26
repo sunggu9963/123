@@ -27,6 +27,11 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
+
+	// ===== 로그인/DB 연동 추가 =====
+	// JdbcTemplate 등 스프링 JDBC 스타터 없이, java.sql(JDK 기본)로 직접 연결.
+	// 기존 hsck 프로젝트(ROOT.war)와 동일한 PostgreSQL 드라이버 버전만 추가.
+	implementation 'org.postgresql:postgresql:42.5.4'
 }
 
 tasks.named('test') {

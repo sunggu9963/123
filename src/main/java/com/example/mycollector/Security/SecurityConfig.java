@@ -12,7 +12,15 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationFa
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
-
+/**
+ * 원본 hsck 프로젝트의 applicationContext-security.xml 대응.
+ *
+ * 원본과 다른 점(요청하신 대로 "단순 로그인"만 남김):
+ *  - IP/MAC/UUID 체크, accessDecisionManager/Voter 없음 - 로그인 여부만 검사
+ *  - RSA 암호화는 유지 (원본과 동일하게 아이디/비밀번호를 암호화해서 전송)
+ *    → RsaLoginAuthenticationFilter를 기본 폼로그인 필터보다 앞에 꽂아서
+ *      원본의 <custom-filter before="FORM_LOGIN_FILTER" .../> 를 그대로 재현
+ */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -34,6 +42,12 @@ public class SecurityConfig {
         RsaLoginAuthenticationFilter rsaLoginAuthenticationFilter = new RsaLoginAuthenticationFilter(rsaKeyManager);
         rsaLoginAuthenticationFilter.setAuthenticationManager(authenticationManager);
         rsaLoginAuthenticationFilter.setFilterProcessesUrl("/login");
+        // setFilterProcessesUrl()만 쓰면 GET/POST 구분 없이 "/login"에 오는 모든 요청을
+        // 이 필터가 가로챈다. GET 요청(로그인 페이지 조회, 실패 후 리다이렉트 등)까지
+        // 걸려서 "POST 아니면 인증 실패" -> "/login?error로 리다이렉트" -> 그것도 GET이라
+        // 또 걸림 -> 무한 리다이렉트가 나므로, POST만 처리하도록 명시해야 한다.
+        rsaLoginAuthenticationFilter.setRequiresAuthenticationRequestMatcher(
+                new AntPathRequestMatcher("/login", "POST"));
         rsaLoginAuthenticationFilter.setAuthenticationSuccessHandler(successHandler);
         rsaLoginAuthenticationFilter.setAuthenticationFailureHandler(
                 new SimpleUrlAuthenticationFailureHandler("/login?error"));
@@ -84,7 +98,12 @@ public class SecurityConfig {
         return http.build();
     }
 
-
+    /**
+     * PasswordEncoder 빈은 이제 여기서 만들지 않는다.
+     * SystemEnvPasswordEncoder(@Component)가 PasswordEncoder를 구현하고 있어서
+     * 스프링이 자동으로 그 빈을 찾아 DaoAuthenticationProvider에 사용한다.
+     * (원본 hsck의 <bean id="passwdEncoder" class="...HrxPasswordEncoderDecider"/> 대응)
+     */
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
