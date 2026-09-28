@@ -82,6 +82,7 @@
   </div>
 
   <div class="error" id="err">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+  <div class="error" id="expiredMsg">다른 곳에서 로그인하여 이 세션은 종료되었습니다.</div>
 
   <form method="post" action="/login" id="loginForm">
     <div class="field">
@@ -106,6 +107,36 @@
   if (location.search.indexOf('error') > -1) {
     document.getElementById('err').classList.add('show');
   }
+  if (location.search.indexOf('expired') > -1) {
+    document.getElementById('expiredMsg').classList.add('show');
+  }
+
+  // 뒤로가기 등으로 로그인 페이지가 브라우저 캐시(bfcache)에서 복원될 때가 있는데,
+  // 이 경우 실제로는 로그인 상태가 멀쩡해도 화면은 예전 로그인 폼 그대로 보임.
+  // 로그인 페이지가 보일 때마다(새로 로드되든, 캐시에서 복원되든) 세션이 이미
+  // 유효한지 확인해서, 이미 로그인돼 있으면 바로 대시보드로 돌려보낸다.
+  // (redirect:'manual' 로 서버가 리다이렉트하는지만 보고, 실제로 안 따라감 -
+  //  응답 body를 읽을 필요 없이 "인증됨(200)" vs "인증 안 됨(리다이렉트)"만 구분)
+  function redirectIfAlreadyLoggedIn() {
+    fetch('/session-info', { method: 'GET', redirect: 'manual', cache: 'no-store' })
+      .then(function (res) {
+        // 리다이렉트를 안 따라가면 status가 0, type이 'opaqueredirect'로 옴 (=미인증)
+        if (res.type === 'opaqueredirect' || res.status === 0) {
+          return; // 로그인 안 된 상태 - 로그인 화면 그대로 둠
+        }
+        if (res.ok) {
+          window.location.replace('/'); // 이미 로그인됨 - 대시보드로
+        }
+      })
+      .catch(function () { /* 확인 실패 시엔 그냥 로그인 화면 유지 */ });
+  }
+
+  redirectIfAlreadyLoggedIn();
+  window.addEventListener('pageshow', function (event) {
+    if (event.persisted) {
+      redirectIfAlreadyLoggedIn();
+    }
+  });
 
   var submitBtn = document.getElementById('submitBtn');
 

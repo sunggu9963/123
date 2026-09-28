@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SessionManager {
 
     private static final String TAG_SESSION_VALUE = "SESSIONVALUE";
-    // 원본의 SESSION_TIME_DEFAULT = 10(분)과 동일
+
     private static final int SESSION_TIME_DEFAULT_MINUTES = 10;
 
     // sessionId -> HttpSession
@@ -67,7 +67,7 @@ public class SessionManager {
             try {
                 minutes = Integer.parseInt(tagValue.trim());
             } catch (NumberFormatException e) {
-                // 원본처럼 잘못된 값이면 기본값을 그대로 사용
+                // 잘못된 값이면 기본값을 그대로 사용
             }
         }
         return minutes * 60;

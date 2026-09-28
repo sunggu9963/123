@@ -7,11 +7,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.Collections;
 
-/**
- * Spring Security가 요구하는 UserDetails 구현체.
- * authentication.getPrincipal()을 캐스팅하면 이 객체가 나오고,
- * getAccount()로 DB에서 조회한 원본 정보(userSeq/userName/userRole 등)에 접근할 수 있다.
- */
+
 public class CustomUserPrincipal implements UserDetails {
 
     private final UserAccount account;
@@ -41,7 +37,6 @@ public class CustomUserPrincipal implements UserDetails {
         return account.getUserId();
     }
 
-    // IP/MAC/UUID/계정 잠금 등 세부 체크는 하지 않기로 했으므로 전부 true 고정
     @Override
     public boolean isAccountNonExpired() {
         return true;
@@ -60,5 +55,22 @@ public class CustomUserPrincipal implements UserDetails {
     @Override
     public boolean isEnabled() {
         return true;
+    }
+
+    // 동시 세션 제어(SecurityConfig의 maximumSessions)가 "같은 아이디로 로그인했는지"를
+    // 판단할 때 이 equals()/hashCode()를 기준으로 비교한다. loadUserByUsername()이
+    // 로그인마다 새 인스턴스를 만들기 때문에, 아이디 기준으로 비교하도록 반드시
+    // 오버라이드해야 한다 (안 하면 매번 "다른 사용자"로 인식돼서 동시 세션 제어가 무력화됨).
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof CustomUserPrincipal)) return false;
+        CustomUserPrincipal other = (CustomUserPrincipal) o;
+        return getUsername() != null && getUsername().equals(other.getUsername());
+    }
+
+    @Override
+    public int hashCode() {
+        return getUsername() != null ? getUsername().hashCode() : 0;
     }
 }
